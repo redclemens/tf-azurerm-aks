@@ -55,7 +55,7 @@ resource "azurerm_kubernetes_cluster" "main" {
       os_disk_size_gb              = var.os_disk_size_gb
       os_disk_type                 = var.os_disk_type
       os_sku                       = var.os_sku
-      pod_subnet_id                = var.pod_subnet_id
+      pod_subnet_id                = try(var.pod_subnet.id, null)
       proximity_placement_group_id = var.agents_proximity_placement_group_id
       scale_down_mode              = var.scale_down_mode
       snapshot_id                  = var.snapshot_id
@@ -63,7 +63,7 @@ resource "azurerm_kubernetes_cluster" "main" {
       temporary_name_for_rotation  = var.temporary_name_for_rotation
       type                         = var.agents_type
       ultra_ssd_enabled            = var.ultra_ssd_enabled
-      vnet_subnet_id               = var.vnet_subnet_id
+      vnet_subnet_id               = try(var.vnet_subnet.id, null)
       zones                        = var.agents_availability_zones
 
       dynamic "kubelet_config" {
@@ -175,7 +175,7 @@ resource "azurerm_kubernetes_cluster" "main" {
       os_disk_size_gb              = var.os_disk_size_gb
       os_disk_type                 = var.os_disk_type
       os_sku                       = var.os_sku
-      pod_subnet_id                = var.pod_subnet_id
+      pod_subnet_id                = try(var.pod_subnet.id, null)
       proximity_placement_group_id = var.agents_proximity_placement_group_id
       scale_down_mode              = var.scale_down_mode
       snapshot_id                  = var.snapshot_id
@@ -183,7 +183,7 @@ resource "azurerm_kubernetes_cluster" "main" {
       temporary_name_for_rotation  = var.temporary_name_for_rotation
       type                         = var.agents_type
       ultra_ssd_enabled            = var.ultra_ssd_enabled
-      vnet_subnet_id               = var.vnet_subnet_id
+      vnet_subnet_id               = try(var.vnet_subnet.id, null)
       zones                        = var.agents_availability_zones
 
       dynamic "kubelet_config" {
@@ -554,6 +554,10 @@ resource "azurerm_kubernetes_cluster" "main" {
     }
   }
 
+  depends_on = [
+    null_resource.pool_name_keeper,
+  ]
+
   lifecycle {
     ignore_changes = [
       http_application_routing_enabled,
@@ -574,6 +578,10 @@ resource "azurerm_kubernetes_cluster" "main" {
       # Why don't use var.identity_ids != null && length(var.identity_ids)>0 ? Because bool expression in Terraform is not short circuit so even var.identity_ids is null Terraform will still invoke length function with null and cause error. https://github.com/hashicorp/terraform/issues/24128
       condition     = (var.client_id != "" && var.client_secret != "") || (var.identity_type == "SystemAssigned") || (var.identity_ids == null ? false : length(var.identity_ids) > 0)
       error_message = "If use identity and `UserAssigned` is set, an `identity_ids` must be set as well."
+    }
+    precondition {
+      condition     = var.identity_ids == null || var.client_id == ""
+      error_message = "Cannot set both `client_id` and `identity_ids`."
     }
     precondition {
       condition     = var.cost_analysis_enabled != true || (var.sku_tier == "Standard" || var.sku_tier == "Premium")
@@ -612,8 +620,8 @@ resource "azurerm_kubernetes_cluster" "main" {
       error_message = "When ebpf_data_plane is set to cilium, the network_plugin field can only be set to azure."
     }
     precondition {
-      condition     = var.ebpf_data_plane != "cilium" || var.network_plugin_mode == "overlay" || var.pod_subnet_id != null
-      error_message = "When ebpf_data_plane is set to cilium, one of either network_plugin_mode = `overlay` or pod_subnet_id must be specified."
+      condition     = var.ebpf_data_plane != "cilium" || var.network_plugin_mode == "overlay" || var.pod_subnet != null
+      error_message = "When ebpf_data_plane is set to cilium, one of either network_plugin_mode = `overlay` or pod_subnet.id must be specified."
     }
     precondition {
       condition     = can(coalesce(var.cluster_name, var.prefix, var.dns_prefix_private_cluster))
@@ -663,6 +671,22 @@ resource "null_resource" "kubernetes_version_keeper" {
   }
 }
 
+resource "time_sleep" "interval_before_cluster_update" {
+  count = var.interval_before_cluster_update == null ? 0 : 1
+
+  create_duration = var.interval_before_cluster_update
+
+  depends_on = [
+    azurerm_kubernetes_cluster.main,
+  ]
+
+  lifecycle {
+    replace_triggered_by = [
+      null_resource.kubernetes_version_keeper.id,
+    ]
+  }
+}
+
 resource "azapi_update_resource" "aks_cluster_post_create" {
   type = "Microsoft.ContainerService/managedClusters@2024-02-01"
   body = {
@@ -671,6 +695,10 @@ resource "azapi_update_resource" "aks_cluster_post_create" {
     }
   }
   resource_id = azurerm_kubernetes_cluster.main.id
+
+  depends_on = [
+    time_sleep.interval_before_cluster_update,
+  ]
 
   lifecycle {
     ignore_changes       = all

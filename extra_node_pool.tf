@@ -28,7 +28,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_create_before_destroy
   os_disk_type                  = each.value.os_disk_type
   os_sku                        = each.value.os_sku
   os_type                       = each.value.os_type
-  pod_subnet_id                 = each.value.pod_subnet_id
+  pod_subnet_id                 = try(each.value.pod_subnet.id, null)
   priority                      = each.value.priority
   proximity_placement_group_id  = each.value.proximity_placement_group_id
   scale_down_mode               = each.value.scale_down_mode
@@ -36,7 +36,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_create_before_destroy
   spot_max_price                = each.value.spot_max_price
   tags                          = each.value.tags
   ultra_ssd_enabled             = each.value.ultra_ssd_enabled
-  vnet_subnet_id                = each.value.vnet_subnet_id
+  vnet_subnet_id                = try(each.value.vnet_subnet.id, null)
   workload_runtime              = each.value.workload_runtime
   zones                         = each.value.zones
 
@@ -186,7 +186,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_create_after_destroy"
   os_disk_type                  = each.value.os_disk_type
   os_sku                        = each.value.os_sku
   os_type                       = each.value.os_type
-  pod_subnet_id                 = each.value.pod_subnet_id
+  pod_subnet_id                 = try(each.value.pod_subnet.id, null)
   priority                      = each.value.priority
   proximity_placement_group_id  = each.value.proximity_placement_group_id
   scale_down_mode               = each.value.scale_down_mode
@@ -194,7 +194,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_create_after_destroy"
   spot_max_price                = each.value.spot_max_price
   tags                          = each.value.tags
   ultra_ssd_enabled             = each.value.ultra_ssd_enabled
-  vnet_subnet_id                = each.value.vnet_subnet_id
+  vnet_subnet_id                = try(each.value.vnet_subnet.id, null)
   workload_runtime              = each.value.workload_runtime
   zones                         = each.value.zones
 
@@ -306,5 +306,12 @@ resource "null_resource" "pool_name_keeper" {
 
   triggers = {
     pool_name = each.value.name
+  }
+
+  lifecycle {
+    precondition {
+      condition     = !var.create_role_assignment_network_contributor || length(distinct(local.subnet_ids)) == length(local.subnet_ids)
+      error_message = "When `var.create_role_assignment_network_contributor` is `true`, you must set different subnet for different node pools, include default pool, otherwise you must set `var.create_role_assignment_network_contributor` to `false` and manage role assignments yourself."
+    }
   }
 }
