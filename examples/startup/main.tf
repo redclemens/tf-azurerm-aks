@@ -39,6 +39,7 @@ module "aks" {
 
   location                  = local.resource_group.location
   prefix                    = random_id.name.hex
+  rbac_aad_tenant_id        = data.azurerm_client_config.current.tenant_id
   resource_group_name       = local.resource_group.name
   kubernetes_version        = "1.30" # don't specify the patch version!
   automatic_channel_upgrade = "patch"
@@ -67,9 +68,9 @@ module "aks" {
   confidential_computing = {
     sgx_quote_helper_enabled = true
   }
-  disk_encryption_set_id = azurerm_disk_encryption_set.des.id
-  enable_auto_scaling    = true
-  enable_host_encryption = true
+  disk_encryption_set_id  = azurerm_disk_encryption_set.des.id
+  auto_scaling_enabled    = true
+  host_encryption_enabled = true
   green_field_application_gateway_for_ingress = {
     name        = "${random_id.prefix.hex}-agw"
     subnet_cidr = "10.52.1.0/24"
@@ -104,7 +105,7 @@ module "aks" {
   network_policy                    = "azure"
   node_os_channel_upgrade           = "NodeImage"
   os_disk_size_gb                   = 60
-  rbac_aad                          = true
+  private_cluster_enabled           = true
   role_based_access_control_enabled = true
   sku_tier                          = "Standard"
   vnet_subnet = {

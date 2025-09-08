@@ -8,11 +8,13 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_create_before_destroy
 
   kubernetes_cluster_id         = azurerm_kubernetes_cluster.main.id
   name                          = "${each.value.name}${substr(md5(uuid()), 0, 4)}"
-  vm_size                       = each.value.vm_size
+  auto_scaling_enabled          = each.value.auto_scaling_enabled
   capacity_reservation_group_id = each.value.capacity_reservation_group_id
   eviction_policy               = each.value.eviction_policy
   fips_enabled                  = each.value.fips_enabled
   gpu_instance                  = each.value.gpu_instance
+  gpu_driver                    = each.value.gpu_driver
+  host_encryption_enabled       = each.value.host_encryption_enabled
   host_group_id                 = each.value.host_group_id
   kubelet_disk_type             = each.value.kubelet_disk_type
   max_count                     = each.value.max_count
@@ -21,6 +23,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_create_before_destroy
   mode                          = each.value.mode
   node_count                    = each.value.node_count
   node_labels                   = each.value.node_labels
+  node_public_ip_enabled        = each.value.node_public_ip_enabled
   node_public_ip_prefix_id      = each.value.node_public_ip_prefix_id
   node_taints                   = each.value.node_taints
   orchestrator_version          = each.value.orchestrator_version
@@ -35,7 +38,9 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_create_before_destroy
   snapshot_id                   = each.value.snapshot_id
   spot_max_price                = each.value.spot_max_price
   tags                          = each.value.tags
+  temporary_name_for_rotation   = each.value.temporary_name_for_rotation
   ultra_ssd_enabled             = each.value.ultra_ssd_enabled
+  vm_size                       = each.value.vm_size
   vnet_subnet_id                = try(each.value.vnet_subnet.id, null)
   workload_runtime              = each.value.workload_runtime
   zones                         = each.value.zones
@@ -167,10 +172,13 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_create_after_destroy"
 
   kubernetes_cluster_id         = azurerm_kubernetes_cluster.main.id
   name                          = each.value.name
-  vm_size                       = each.value.vm_size
+  auto_scaling_enabled          = each.value.auto_scaling_enabled
   capacity_reservation_group_id = each.value.capacity_reservation_group_id
   eviction_policy               = each.value.eviction_policy
   fips_enabled                  = each.value.fips_enabled
+  gpu_instance                  = each.value.gpu_instance
+  gpu_driver                    = each.value.gpu_driver
+  host_encryption_enabled       = each.value.host_encryption_enabled
   host_group_id                 = each.value.host_group_id
   kubelet_disk_type             = each.value.kubelet_disk_type
   max_count                     = each.value.max_count
@@ -179,6 +187,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_create_after_destroy"
   mode                          = each.value.mode
   node_count                    = each.value.node_count
   node_labels                   = each.value.node_labels
+  node_public_ip_enabled        = each.value.node_public_ip_enabled
   node_public_ip_prefix_id      = each.value.node_public_ip_prefix_id
   node_taints                   = each.value.node_taints
   orchestrator_version          = each.value.orchestrator_version
@@ -193,7 +202,9 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_create_after_destroy"
   snapshot_id                   = each.value.snapshot_id
   spot_max_price                = each.value.spot_max_price
   tags                          = each.value.tags
+  temporary_name_for_rotation   = each.value.temporary_name_for_rotation
   ultra_ssd_enabled             = each.value.ultra_ssd_enabled
+  vm_size                       = each.value.vm_size
   vnet_subnet_id                = try(each.value.vnet_subnet.id, null)
   workload_runtime              = each.value.workload_runtime
   zones                         = each.value.zones

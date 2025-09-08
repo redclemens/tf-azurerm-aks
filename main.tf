@@ -14,6 +14,7 @@ resource "azurerm_kubernetes_cluster" "main" {
   location                            = var.location
   name                                = "${local.cluster_name}${var.cluster_name_random_suffix ? substr(md5(uuid()), 0, 4) : ""}"
   resource_group_name                 = var.resource_group_name
+  automatic_upgrade_channel           = var.automatic_channel_upgrade
   azure_policy_enabled                = var.azure_policy_enabled
   cost_analysis_enabled               = var.cost_analysis_enabled
   disk_encryption_set_id              = var.disk_encryption_set_id
@@ -23,9 +24,11 @@ resource "azurerm_kubernetes_cluster" "main" {
   image_cleaner_interval_hours        = var.image_cleaner_interval_hours
   kubernetes_version                  = var.kubernetes_version
   local_account_disabled              = var.local_account_disabled
+  node_os_upgrade_channel             = var.node_os_channel_upgrade
   node_resource_group                 = var.node_resource_group
   oidc_issuer_enabled                 = var.oidc_issuer_enabled
   open_service_mesh_enabled           = var.open_service_mesh_enabled
+  private_cluster_enabled             = var.private_cluster_enabled
   private_cluster_public_fqdn_enabled = var.private_cluster_public_fqdn_enabled
   private_dns_zone_id                 = var.private_dns_zone_id
   role_based_access_control_enabled   = var.role_based_access_control_enabled
@@ -36,20 +39,20 @@ resource "azurerm_kubernetes_cluster" "main" {
   workload_identity_enabled           = var.workload_identity_enabled
 
   dynamic "default_node_pool" {
-    for_each = var.enable_auto_scaling == true ? [] : ["default_node_pool_manually_scaled"]
+    for_each = var.auto_scaling_enabled == true ? [] : ["default_node_pool_manually_scaled"]
 
     content {
       name                         = var.agents_pool_name
       vm_size                      = var.agents_size
-      enable_auto_scaling          = var.enable_auto_scaling
-      enable_host_encryption       = var.enable_host_encryption
-      enable_node_public_ip        = var.enable_node_public_ip
+      auto_scaling_enabled         = var.auto_scaling_enabled
       fips_enabled                 = var.default_node_pool_fips_enabled
+      host_encryption_enabled      = var.host_encryption_enabled
       max_count                    = null
       max_pods                     = var.agents_max_pods
       min_count                    = null
       node_count                   = var.agents_count
       node_labels                  = var.agents_labels
+      node_public_ip_enabled       = var.node_public_ip_enabled
       only_critical_addons_enabled = var.only_critical_addons_enabled
       orchestrator_version         = var.orchestrator_version
       os_disk_size_gb              = var.os_disk_size_gb
@@ -157,19 +160,19 @@ resource "azurerm_kubernetes_cluster" "main" {
     }
   }
   dynamic "default_node_pool" {
-    for_each = var.enable_auto_scaling == true ? ["default_node_pool_auto_scaled"] : []
+    for_each = var.auto_scaling_enabled == true ? ["default_node_pool_auto_scaled"] : []
 
     content {
       name                         = var.agents_pool_name
       vm_size                      = var.agents_size
-      enable_auto_scaling          = var.enable_auto_scaling
-      enable_host_encryption       = var.enable_host_encryption
-      enable_node_public_ip        = var.enable_node_public_ip
+      auto_scaling_enabled         = var.auto_scaling_enabled
       fips_enabled                 = var.default_node_pool_fips_enabled
+      host_encryption_enabled      = var.host_encryption_enabled
       max_count                    = var.agents_max_count
       max_pods                     = var.agents_max_pods
       min_count                    = var.agents_min_count
       node_labels                  = var.agents_labels
+      node_public_ip_enabled       = var.node_public_ip_enabled
       only_critical_addons_enabled = var.only_critical_addons_enabled
       orchestrator_version         = var.orchestrator_version
       os_disk_size_gb              = var.os_disk_size_gb
@@ -298,12 +301,11 @@ resource "azurerm_kubernetes_cluster" "main" {
     }
   }
   dynamic "azure_active_directory_role_based_access_control" {
-    for_each = var.role_based_access_control_enabled && var.rbac_aad ? ["rbac"] : []
+    for_each = var.role_based_access_control_enabled ? ["rbac"] : []
 
     content {
       admin_group_object_ids = var.rbac_aad_admin_group_object_ids
       azure_rbac_enabled     = var.rbac_aad_azure_rbac_enabled
-      managed                = true
       tenant_id              = var.rbac_aad_tenant_id
     }
   }
@@ -325,7 +327,7 @@ resource "azurerm_kubernetes_cluster" "main" {
     }
   }
   dynamic "identity" {
-    for_each = var.client_id == "" || var.client_secret == "" ? ["identity"] : []
+    for_each = var.client_id == "" || nonsensitive(var.client_secret) == "" ? ["identity"] : []
 
     content {
       type         = var.identity_type
@@ -466,18 +468,13 @@ resource "azurerm_kubernetes_cluster" "main" {
   network_profile {
     network_plugin      = var.network_plugin
     dns_service_ip      = var.net_profile_dns_service_ip
-    ebpf_data_plane     = var.ebpf_data_plane
-    ip_versions         = var.network_ip_versions
     load_balancer_sku   = var.load_balancer_sku
-    network_data_plane  = var.network_data_plane
-    network_mode        = var.network_mode
+    network_data_plane  = var.ebpf_data_plane
     network_plugin_mode = var.network_plugin_mode
     network_policy      = var.network_policy
     outbound_type       = var.net_profile_outbound_type
     pod_cidr            = var.net_profile_pod_cidr
-    pod_cidrs           = var.net_profile_pod_cidrs
     service_cidr        = var.net_profile_service_cidr
-    service_cidrs       = var.net_profile_service_cidrs
 
     dynamic "load_balancer_profile" {
       for_each = var.load_balancer_profile_enabled && var.load_balancer_sku == "standard" ? [
@@ -515,6 +512,7 @@ resource "azurerm_kubernetes_cluster" "main" {
 
     content {
       mode                             = var.service_mesh_profile.mode
+      revisions                        = var.service_mesh_profile.revisions
       external_ingress_gateway_enabled = var.service_mesh_profile.external_ingress_gateway_enabled
       internal_ingress_gateway_enabled = var.service_mesh_profile.internal_ingress_gateway_enabled
     }
@@ -533,11 +531,20 @@ resource "azurerm_kubernetes_cluster" "main" {
     content {
       blob_driver_enabled         = var.storage_profile_blob_driver_enabled
       disk_driver_enabled         = var.storage_profile_disk_driver_enabled
-      disk_driver_version         = var.storage_profile_disk_driver_version
       file_driver_enabled         = var.storage_profile_file_driver_enabled
       snapshot_controller_enabled = var.storage_profile_snapshot_controller_enabled
     }
   }
+
+  dynamic "upgrade_override" {
+    for_each = var.upgrade_override != null ? ["use_upgrade_override"] : []
+    content {
+      effective_until       = var.upgrade_override.effective_until
+      force_upgrade_enabled = var.upgrade_override.force_upgrade_enabled
+    }
+
+  }
+
   dynamic "web_app_routing" {
     for_each = var.web_app_routing == null ? [] : ["web_app_routing"]
 
@@ -637,7 +644,7 @@ resource "azurerm_kubernetes_cluster" "main" {
       error_message = "When `kubelet_identity` is enabled - The `type` field in the `identity` block must be set to `UserAssigned` and `identity_ids` must be set."
     }
     precondition {
-      condition     = var.enable_auto_scaling != true || var.agents_type == "VirtualMachineScaleSets"
+      condition     = var.auto_scaling_enabled != true || var.agents_type == "VirtualMachineScaleSets"
       error_message = "Autoscaling on default node pools is only supported when the Kubernetes Cluster is using Virtual Machine Scale Sets type nodes."
     }
     precondition {
@@ -647,6 +654,10 @@ resource "azurerm_kubernetes_cluster" "main" {
     precondition {
       condition     = var.prefix == null || var.dns_prefix_private_cluster == null
       error_message = "Only one of `var.prefix,var.dns_prefix_private_cluster` can be specified."
+    }
+    precondition {
+      condition     = var.dns_prefix_private_cluster == null || var.private_cluster_enabled
+      error_message = "When `dns_prefix_private_cluster` is set, `private_cluster_enabled` must be set to `true`."
     }
     precondition {
       condition     = var.dns_prefix_private_cluster == null || var.identity_type == "UserAssigned" || var.client_id != ""
@@ -688,13 +699,13 @@ resource "time_sleep" "interval_before_cluster_update" {
 }
 
 resource "azapi_update_resource" "aks_cluster_post_create" {
-  type = "Microsoft.ContainerService/managedClusters@2024-02-01"
+  resource_id = azurerm_kubernetes_cluster.main.id
+  type        = "Microsoft.ContainerService/managedClusters@2024-02-01"
   body = {
     properties = {
       kubernetesVersion = var.kubernetes_version
     }
   }
-  resource_id = azurerm_kubernetes_cluster.main.id
 
   depends_on = [
     time_sleep.interval_before_cluster_update,
@@ -717,7 +728,8 @@ resource "null_resource" "http_proxy_config_no_proxy_keeper" {
 resource "azapi_update_resource" "aks_cluster_http_proxy_config_no_proxy" {
   count = can(var.http_proxy_config.no_proxy[0]) ? 1 : 0
 
-  type = "Microsoft.ContainerService/managedClusters@2024-02-01"
+  resource_id = azurerm_kubernetes_cluster.main.id
+  type        = "Microsoft.ContainerService/managedClusters@2024-02-01"
   body = {
     properties = {
       httpProxyConfig = {
@@ -725,7 +737,6 @@ resource "azapi_update_resource" "aks_cluster_http_proxy_config_no_proxy" {
       }
     }
   }
-  resource_id = azurerm_kubernetes_cluster.main.id
 
   depends_on = [azapi_update_resource.aks_cluster_post_create]
 

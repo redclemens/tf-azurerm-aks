@@ -39,6 +39,7 @@ module "aks_without_monitor" {
   source = "../.."
 
   prefix                 = "prefix2-${random_id.prefix.hex}"
+  rbac_aad_tenant_id     = data.azurerm_client_config.current.tenant_id
   resource_group_name    = local.resource_group.name
   location               = local.resource_group.location
   admin_username         = null
@@ -47,6 +48,7 @@ module "aks_without_monitor" {
   #checkov:skip=CKV_AZURE_4:The logging is turn off for demo purpose. DO NOT DO THIS IN PRODUCTION ENVIRONMENT!
   log_analytics_workspace_enabled   = false
   net_profile_pod_cidr              = "10.1.0.0/16"
+  private_cluster_enabled           = true
   role_based_access_control_enabled = true
   web_app_routing = {
     dns_zone_ids = [azurerm_dns_zone.aks_web_app_routing.id]

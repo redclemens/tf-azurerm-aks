@@ -130,6 +130,7 @@ resource "azurerm_application_gateway" "appgw" {
       probe,
       request_routing_rule,
       url_path_map,
+      zones,
     ]
   }
 }
@@ -161,10 +162,10 @@ module "aks" {
       ]
     }
   ]
-  agents_type            = "VirtualMachineScaleSets"
-  azure_policy_enabled   = true
-  enable_auto_scaling    = true
-  enable_host_encryption = true
+  agents_type             = "VirtualMachineScaleSets"
+  azure_policy_enabled    = true
+  auto_scaling_enabled    = true
+  host_encryption_enabled = true
   green_field_application_gateway_for_ingress = var.use_brown_field_application_gateway ? null : {
     name        = "ingress"
     subnet_cidr = local.appgw_cidr
@@ -181,8 +182,9 @@ module "aks" {
   network_plugin                                  = "azure"
   network_policy                                  = "azure"
   os_disk_size_gb                                 = 60
+  private_cluster_enabled                         = false
   role_based_access_control_enabled               = true
-  rbac_aad                                        = true
+  rbac_aad_tenant_id                              = data.azurerm_client_config.this.tenant_id
   sku_tier                                        = "Standard"
   vnet_subnet = var.bring_your_own_vnet ? {
     id = azurerm_subnet.test[0].id

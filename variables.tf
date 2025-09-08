@@ -35,7 +35,7 @@ variable "agents_availability_zones" {
 variable "agents_count" {
   type        = number
   default     = 2
-  description = "The number of Agents that should exist in the Agent Pool. Please set `agents_count` `null` while `enable_auto_scaling` is `true` to avoid possible `agents_count` changes."
+  description = "The number of Agents that should exist in the Agent Pool. Please set `agents_count` `null` while `auto_scaling_enabled` is `true` to avoid possible `agents_count` changes."
 }
 
 variable "agents_labels" {
@@ -436,6 +436,13 @@ variable "cost_analysis_enabled" {
   description = "(Optional) Enable Cost Analysis."
 }
 
+variable "create_monitor_data_collection_rule" {
+  type        = bool
+  default     = true
+  description = "Create monitor data collection rule resource for the AKS cluster. Defaults to `true`."
+  nullable    = false
+}
+
 variable "create_role_assignment_network_contributor" {
   type        = bool
   default     = false
@@ -496,19 +503,19 @@ variable "ebpf_data_plane" {
   description = "(Optional) Specifies the eBPF data plane used for building the Kubernetes network. Possible value is `cilium`. Changing this forces a new resource to be created."
 }
 
-variable "enable_auto_scaling" {
+variable "auto_scaling_enabled" {
   type        = bool
   default     = false
   description = "Enable node pool autoscaling"
 }
 
-variable "enable_host_encryption" {
+variable "host_encryption_enabled" {
   type        = bool
   default     = false
   description = "Enable Host Encryption for default node pool. Encryption at host feature must be enabled on the subscription: https://docs.microsoft.com/azure/virtual-machines/linux/disks-enable-host-based-encryption-cli"
 }
 
-variable "enable_node_public_ip" {
+variable "node_public_ip_enabled" {
   type        = bool
   default     = false
   description = "(Optional) Should nodes in this Node Pool have a Public IP Address? Defaults to false."
@@ -982,22 +989,10 @@ variable "net_profile_pod_cidr" {
   description = " (Optional) The CIDR to use for pod IP addresses. This field can only be set when network_plugin is set to kubenet or network_plugin is set to azure and network_plugin_mode is set to overlay. Changing this forces a new resource to be created."
 }
 
-variable "net_profile_pod_cidrs" {
-  type        = list(string)
-  default     = null
-  description = "(Optional) A list of CIDRs to use for pod IP addresses. For single-stack networking a single IPv4 CIDR is expected. For dual-stack networking an IPv4 and IPv6 CIDR are expected. Changing this forces a new resource to be created."
-}
-
 variable "net_profile_service_cidr" {
   type        = string
   default     = null
   description = "(Optional) The Network Range used by the Kubernetes service. Changing this forces a new resource to be created."
-}
-
-variable "net_profile_service_cidrs" {
-  type        = list(string)
-  default     = null
-  description = "(Optional) A list of CIDRs to use for Kubernetes services. For single-stack networking a single IPv4 CIDR is expected. For dual-stack networking an IPv4 and IPv6 CIDR are expected. Changing this forces a new resource to be created."
 }
 
 variable "network_contributor_role_assigned_subnet_ids" {
@@ -1005,24 +1000,6 @@ variable "network_contributor_role_assigned_subnet_ids" {
   default     = {}
   description = "Create role assignments for the AKS Service Principal to be a Network Contributor on the subnets used for the AKS Cluster, key should be static string, value should be subnet's id"
   nullable    = false
-}
-
-variable "network_data_plane" {
-  type        = string
-  default     = null
-  description = "(Optional) Specifies the data plane used for building the Kubernetes network. Possible values are `azure` and `cilium`. Defaults to `azure`. Disabling this forces a new resource to be created."
-}
-
-variable "network_ip_versions" {
-  type        = list(string)
-  default     = null
-  description = "(Optional) Specifies a list of IP versions the Kubernetes Cluster will use to assign IP addresses to its nodes and pods. Possible values are `IPv4` and/or `IPv6`. `IPv4` must always be specified. Changing this forces a new resource to be created."
-}
-
-variable "network_mode" {
-  type        = string
-  default     = null
-  description = "(Optional) Network mode to be used with Azure CNI. Possible values are `bridge` and `transparent`. Changing this forces a new resource to be created."
 }
 
 variable "network_plugin" {
@@ -1081,11 +1058,12 @@ variable "node_pools" {
     host_group_id                 = optional(string)
     capacity_reservation_group_id = optional(string)
     custom_ca_trust_enabled       = optional(bool)
-    enable_auto_scaling           = optional(bool)
-    enable_host_encryption        = optional(bool)
-    enable_node_public_ip         = optional(bool)
+    auto_scaling_enabled          = optional(bool)
+    host_encryption_enabled       = optional(bool)
+    node_public_ip_enabled        = optional(bool)
     eviction_policy               = optional(string)
     gpu_instance                  = optional(string)
+    gpu_driver                    = optional(string)
     kubelet_config = optional(object({
       cpu_manager_policy        = optional(string)
       cpu_cfs_quota_enabled     = optional(bool)
@@ -1178,9 +1156,10 @@ variable "node_pools" {
     windows_profile = optional(object({
       outbound_nat_enabled = optional(bool, true)
     }))
-    workload_runtime      = optional(string)
-    zones                 = optional(set(string))
-    create_before_destroy = optional(bool, true)
+    workload_runtime            = optional(string)
+    zones                       = optional(set(string))
+    create_before_destroy       = optional(bool, true)
+    temporary_name_for_rotation = optional(string)
   }))
   default     = {}
   description = <<-EOT
@@ -1193,11 +1172,12 @@ variable "node_pools" {
     host_group_id                 = (Optional) The fully qualified resource ID of the Dedicated Host Group to provision virtual machines from. Changing this forces a new resource to be created.
     capacity_reservation_group_id = (Optional) Specifies the ID of the Capacity Reservation Group where this Node Pool should exist. Changing this forces a new resource to be created.
     custom_ca_trust_enabled       = (Optional) Specifies whether to trust a Custom CA. This requires that the Preview Feature `Microsoft.ContainerService/CustomCATrustPreview` is enabled and the Resource Provider is re-registered, see [the documentation](https://learn.microsoft.com/en-us/azure/aks/custom-certificate-authority) for more information.
-    enable_auto_scaling           = (Optional) Whether to enable [auto-scaler](https://docs.microsoft.com/azure/aks/cluster-autoscaler).
-    enable_host_encryption        = (Optional) Should the nodes in this Node Pool have host encryption enabled? Changing this forces a new resource to be created.
-    enable_node_public_ip         = (Optional) Should each node have a Public IP Address? Changing this forces a new resource to be created.
+    auto_scaling_enabled          = (Optional) Whether to enable [auto-scaler](https://docs.microsoft.com/azure/aks/cluster-autoscaler).
+    host_encryption_enabled       = (Optional) Should the nodes in this Node Pool have host encryption enabled? Changing this forces a new resource to be created.
+    node_public_ip_enabled        = (Optional) Should each node have a Public IP Address? Changing this forces a new resource to be created.
     eviction_policy               = (Optional) The Eviction Policy which should be used for Virtual Machines within the Virtual Machine Scale Set powering this Node Pool. Possible values are `Deallocate` and `Delete`. Changing this forces a new resource to be created. An Eviction Policy can only be configured when `priority` is set to `Spot` and will default to `Delete` unless otherwise specified.
     gpu_instance                  = (Optional) Specifies the GPU MIG instance profile for supported GPU VM SKU. The allowed values are `MIG1g`, `MIG2g`, `MIG3g`, `MIG4g` and `MIG7g`. Changing this forces a new resource to be created.
+    gpu_driver                    = (Optional) Specifies the GPU Driver configuration to be installed on each GPU node. The allowed values are `Install` and `None`. Changing this forces a new resource to be created.
     kubelet_config = optional(object({
       cpu_manager_policy        = (Optional) Specifies the CPU Manager policy to use. Possible values are `none` and `static`, Changing this forces a new resource to be created.
       cpu_cfs_quota_enabled     = (Optional) Is CPU CFS quota enforcement for containers enabled? Changing this forces a new resource to be created.
@@ -1263,7 +1243,7 @@ variable "node_pools" {
       }))
     }))
     node_labels                  = (Optional) A map of Kubernetes labels which should be applied to nodes in this Node Pool.
-    node_public_ip_prefix_id     = (Optional) Resource ID for the Public IP Addresses Prefix for the nodes in this Node Pool. `enable_node_public_ip` should be `true`. Changing this forces a new resource to be created.
+    node_public_ip_prefix_id     = (Optional) Resource ID for the Public IP Addresses Prefix for the nodes in this Node Pool. `node_public_ip_enabled` should be `true`. Changing this forces a new resource to be created.
     node_taints                  = (Optional) A list of Kubernetes taints which should be applied to nodes in the agent pool (e.g `key=value:NoSchedule`). Changing this forces a new resource to be created.
     orchestrator_version         = (Optional) Version of Kubernetes used for the Agents. If not specified, the latest recommended version will be used at provisioning time (but won't auto-upgrade). AKS does not require an exact patch version to be specified, minor version aliases such as `1.22` are also supported. - The minor version's latest GA patch is automatically chosen in that case. More details can be found in [the documentation](https://docs.microsoft.com/en-us/azure/aks/supported-kubernetes-versions?tabs=azure-cli#alias-minor-version). This version must be supported by the Kubernetes Cluster - as such the version of Kubernetes used on the Cluster/Control Plane may need to be upgraded first.
     os_disk_size_gb              = (Optional) The Agent Operating System disk size in GB. Changing this forces a new resource to be created.
@@ -1293,6 +1273,7 @@ variable "node_pools" {
     workload_runtime = (Optional) Used to specify the workload runtime. Allowed values are `OCIContainer` and `WasmWasi`. WebAssembly System Interface node pools are in Public Preview - more information and details on how to opt into the preview can be found in [this article](https://docs.microsoft.com/azure/aks/use-wasi-node-pools)
     zones            = (Optional) Specifies a list of Availability Zones in which this Kubernetes Cluster Node Pool should be located. Changing this forces a new Kubernetes Cluster Node Pool to be created.
     create_before_destroy = (Optional) Create a new node pool before destroy the old one when Terraform must update an argument that cannot be updated in-place. Set this argument to `true` will add add a random suffix to pool's name to avoid conflict. Default to `true`.
+    temporary_name_for_rotation = (Optional) Specifies the name of the temporary node pool used to cycle the node pool when one of the relevant properties are updated.
   }))
   EOT
   nullable    = false
@@ -1372,6 +1353,12 @@ variable "prefix" {
   description = "(Optional) The prefix for the resources created in the specified Azure Resource Group. Omitting this variable requires both `var.cluster_log_analytics_workspace_name` and `var.cluster_name` have been set. Only one of `var.prefix,var.dns_prefix_private_cluster` can be specified."
 }
 
+variable "private_cluster_enabled" {
+  type        = bool
+  default     = false
+  description = "If true cluster API server will be exposed only on internal IP address and available only in cluster vnet."
+}
+
 variable "private_cluster_public_fqdn_enabled" {
   type        = bool
   default     = false
@@ -1388,13 +1375,6 @@ variable "public_ssh_key" {
   type        = string
   default     = ""
   description = "A custom ssh key to control access to the AKS cluster. Changing this forces a new resource to be created."
-}
-
-variable "rbac_aad" {
-  type        = bool
-  default     = true
-  description = "(Optional) Is Azure Active Directory integration enabled?"
-  nullable    = false
 }
 
 variable "rbac_aad_admin_group_object_ids" {
@@ -1451,12 +1431,14 @@ variable "secret_rotation_interval" {
 variable "service_mesh_profile" {
   type = object({
     mode                             = string
+    revisions                        = list(string)
     internal_ingress_gateway_enabled = optional(bool, true)
     external_ingress_gateway_enabled = optional(bool, true)
   })
   default     = null
   description = <<-EOT
     `mode` - (Required) The mode of the service mesh. Possible value is `Istio`.
+    `revisions` - (Required) Specify 1 or 2 Istio control plane revisions for managing minor upgrades using the canary upgrade process. For example, create the resource with `revisions` set to `["asm-1-20"]`, or leave it empty (the `revisions` will only be known after apply). To start the canary upgrade, change `revisions` to `["asm-1-20", "asm-1-21"]`. To roll back the canary upgrade, revert to `["asm-1-20"]`. To confirm the upgrade, change to `["asm-1-21"]`.
     `internal_ingress_gateway_enabled` - (Optional) Is Istio Internal Ingress Gateway enabled? Defaults to `true`.
     `external_ingress_gateway_enabled` - (Optional) Is Istio External Ingress Gateway enabled? Defaults to `true`.
   EOT
@@ -1489,12 +1471,6 @@ variable "storage_profile_disk_driver_enabled" {
   type        = bool
   default     = true
   description = "(Optional) Is the Disk CSI driver enabled? Defaults to `true`"
-}
-
-variable "storage_profile_disk_driver_version" {
-  type        = string
-  default     = "v1"
-  description = "(Optional) Disk CSI Driver version to be used. Possible values are `v1` and `v2`. Defaults to `v1`."
 }
 
 variable "storage_profile_enabled" {
@@ -1585,4 +1561,16 @@ variable "workload_identity_enabled" {
   type        = bool
   default     = false
   description = "Enable or Disable Workload Identity. Defaults to false."
+}
+
+variable "upgrade_override" {
+  type = object({
+    force_upgrade_enabled = bool
+    effective_until       = optional(string)
+  })
+  default     = null
+  description = <<-EOT
+    `force_upgrade_enabled` - (Required) Whether to force upgrade the cluster. Possible values are `true` or `false`.
+    `effective_until` - (Optional) Specifies the duration, in RFC 3339 format (e.g., `2025-10-01T13:00:00Z`), the upgrade_override values are effective. This field must be set for the `upgrade_override` values to take effect. The date-time must be within the next 30 days.
+  EOT
 }
